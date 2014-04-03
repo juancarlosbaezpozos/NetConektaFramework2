@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Text;
 using System.Net;
 //*API para realizar pagos en coonekta, usada en Framework 2.0*//
@@ -8,14 +7,51 @@ namespace ConektaFramework2
 {
     public class ConektaPagos
     {
-        string privatekey = string.Empty,publickey = string.Empty;
+        string privatekey = string.Empty, publickey = string.Empty, version = "0.3.0";
 
-        public ConektaPagos(string llavePrivada,string llavePublica)
+        public ConektaPagos(string llavePrivada,string llavePublica,string versionConekta)
         {
             this.privatekey = llavePrivada;
             this.publickey = llavePublica;
+            if (!string.IsNullOrEmpty(versionConekta))
+            {
+                this.version = versionConekta;
+            }
         }
 
+        //Base
+        private HttpWebRequest _conektaBase(string sURL,string sMetodo,int nTipoLlave) //0 = privada | 1 = publica
+        {
+            HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(sURL);
+            webRequest.KeepAlive = false;
+            webRequest.ContentType = "application/json";
+            webRequest.Method = sMetodo;
+            webRequest.Accept = string.Format("application/vnd.conekta-v{0}+json", this.version);
+            if(nTipoLlave == 1)//publica
+                webRequest.Headers["Authorization"] = "Basic " + Convert.ToBase64String(Encoding.Default.GetBytes(this.publickey + ":"));
+            else//privada
+                webRequest.Credentials = new NetworkCredential(this.privatekey, "");     
+            return webRequest;
+        }
+
+        private string _conektaBaseResultado(HttpWebRequest webRequest)
+        {
+            try
+            {
+                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
+                string sResultado = string.Empty;
+                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
+                {
+                    sResultado = reader.ReadToEnd();
+                }
+                webResponse.Close();
+                return sResultado;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
 
         //Planes
         public string crearPlan(string sId,string sName,string sAmount,string sInterval,string sFrecuency)
@@ -56,29 +92,16 @@ namespace ConektaFramework2
 
                 sBody = "{"+sb.ToString().Remove(sb.ToString().Length - 1)+"}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create("https://api.conekta.io/plans");
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                HttpWebRequest webRequest = _conektaBase("https://api.conekta.io/plans", "POST", 0);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al crear Plan";
+                return string.Format("Error:A currido un error al crear Plan ({0})",ex.Message);
             }
         }
 
@@ -119,32 +142,19 @@ namespace ConektaFramework2
                 {
                     sBody = "{"+sb.ToString().Remove(sb.ToString().Length - 1)+"}";
 
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/plans/{0}", sIdOld));
-                    webRequest.KeepAlive = false;
-                    webRequest.ContentType = "application/json";
-                    webRequest.Method = "PUT";
-                    webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                    webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                    HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/plans/{0}", sIdOld), "PUT", 0);
                     using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                     {
                         writer.Write(sBody);
                     }
-
-                    HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                    string sResultado = string.Empty;
-                    using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                    {
-                        sResultado = reader.ReadToEnd();
-                    }
-                    webResponse.Close();
-                    return sResultado;
+                    return _conektaBaseResultado(webRequest);
                 }
                 else
                     return string.Empty;
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al editar Plan";
+                return string.Format("Error:A currido un error al editar Plan ({0})",ex.Message);
             }
         }
 
@@ -154,28 +164,15 @@ namespace ConektaFramework2
             {
                 if (!String.IsNullOrEmpty(sId))
                 {
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/plans/{0}",sId));
-                    webRequest.KeepAlive = false;
-                    //webRequest.ContentType = "application/json";
-                    webRequest.Method = "DELETE";
-                    webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                    webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-
-                    HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                    string sResultado = string.Empty;
-                    using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                    {
-                        sResultado = reader.ReadToEnd();
-                    }
-                    webResponse.Close();
-                    return sResultado;
+                    HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/plans/{0}", sId), "DELETE", 0);
+                    return _conektaBaseResultado(webRequest);
                 }
                 else
                     return string.Empty;
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al eliminar Plan";
+                return string.Format("Error:A currido un error al eliminar Plan ({0})",ex.Message);
             }
         }
 
@@ -217,29 +214,16 @@ namespace ConektaFramework2
 
                 sBody = "{" + sb.ToString().Remove(sb.ToString().Length - 1) + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create("https://api.conekta.io/customers");
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                HttpWebRequest webRequest = _conektaBase("https://api.conekta.io/customers", "POST", 0);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al crear Cliente";
+                return string.Format("Error:A currido un error al crear Cliente ({0})",ex.Message);
             }
         }
 
@@ -266,31 +250,19 @@ namespace ConektaFramework2
                 {
                     sBody = "{" + sb.ToString().Remove(sb.ToString().Length - 1) + "}";
 
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}", sId));
-                    webRequest.KeepAlive = false;
-                    webRequest.ContentType = "application/json";
-                    webRequest.Method = "PUT";
-                    webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                    webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                    HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}", sId), "PUT", 0);
                     using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                     {
                         writer.Write(sBody);
                     }
-                    HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                    string sResultado = string.Empty;
-                    using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                    {
-                        sResultado = reader.ReadToEnd();
-                    }
-                    webResponse.Close();
-                    return sResultado;
+                    return _conektaBaseResultado(webRequest);
                 }
                 else
                     return string.Empty;
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al editar Cliente";
+                return string.Format("Error:A currido un error al editar Cliente ({0})",ex.Message);
             }
         }
 
@@ -300,28 +272,15 @@ namespace ConektaFramework2
             {
                 if (!String.IsNullOrEmpty(sId))
                 {
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}",sId));
-                    webRequest.KeepAlive = false;
-                    //webRequest.ContentType = "application/json";
-                    webRequest.Method = "DELETE";
-                    webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                    webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-
-                    HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                    string sResultado = string.Empty;
-                    using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                    {
-                        sResultado = reader.ReadToEnd();
-                    }
-                    webResponse.Close();
-                    return sResultado;
+                    HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}", sId), "DELETE", 0);
+                    return _conektaBaseResultado(webRequest);
                 }
                 else
                     return string.Empty;
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al eliminar Cliente";
+                return string.Format("Error:A currido un error al eliminar Cliente ({0})",ex.Message);
             }
         }
     
@@ -347,29 +306,17 @@ namespace ConektaFramework2
 
                 sBody = "{" + sb.ToString() + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/cards/",sIdCliente));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/cards/", sIdCliente), "POST", 0);
+                
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al agregar Tarjeta";
+                return string.Format("Error:A currido un error al agregar Tarjeta ({0})",ex.Message);
             }
         }
 
@@ -398,29 +345,16 @@ namespace ConektaFramework2
 
                 sBody = "{" + sb.ToString() + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/cards/{1}", sIdCliente, sIdTarjeta));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "PUT";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/cards/{1}", sIdCliente, sIdTarjeta), "PUT", 0);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al editar Tarjeta";
+                return string.Format("Error:A currido un error al editar Tarjeta ({0})",ex.Message);
             }
         }
 
@@ -439,25 +373,12 @@ namespace ConektaFramework2
                     return "Error:Requiere ID de la Tarjeta";
                 }
                 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/cards/{1}", sIdCliente,sIdTarjeta));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "DELETE";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-               
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/cards/{1}", sIdCliente, sIdTarjeta), "DELETE", 0);
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al eliminar Tarjeta";
+                return string.Format("Error:A currido un error al eliminar Tarjeta ({0})",ex.Message);
             }
         }
     
@@ -487,29 +408,17 @@ namespace ConektaFramework2
                 
                 sBody = "{" + sb.ToString().Remove(sb.ToString().Length - 1) + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/subscription", sIdCliente));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/subscription", sIdCliente), "POST", 0);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
 
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al crear Suscripcion";
+                return string.Format("Error:A currido un error al crear Suscripcion ({0})",ex.Message);
             }
         }
 
@@ -538,31 +447,19 @@ namespace ConektaFramework2
                 if (band)
                 {
                     sBody = "{" + sb.ToString().Remove(sb.ToString().Length - 1) + "}";
-                    HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/subscription", sIdCliente));
-                    webRequest.KeepAlive = false;
-                    webRequest.ContentType = "application/json";
-                    webRequest.Method = "PUT";
-                    webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                    webRequest.Credentials = new NetworkCredential(this.privatekey, "");
+                    HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/subscription", sIdCliente), "PUT", 0);
                     using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                     {
                         writer.Write(sBody);
                     }
-                    HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                    string sResultado = string.Empty;
-                    using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                    {
-                        sResultado = reader.ReadToEnd();
-                    }
-                    webResponse.Close();
-                    return sResultado;
+                    return _conektaBaseResultado(webRequest);
                 }
                 else
                     return string.Empty;
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al editar Suscripcion";
+                return string.Format("Error:A currido un error al editar Suscripcion ({0})",ex.Message);
             }
         }
 
@@ -577,25 +474,12 @@ namespace ConektaFramework2
                     return "Error: Requiere el Id del Cliente";
                 }
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/subscription/pause", sIdCliente));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-                
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/subscription/pause", sIdCliente), "POST", 0);
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al pausar Suscripcion";
+                return string.Format("Error:A currido un error al pausar Suscripcion ({0})",ex.Message);
             }
         }
 
@@ -610,25 +494,12 @@ namespace ConektaFramework2
                     return "Error: Requiere el Id del Cliente";
                 }
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/subscription/resume", sIdCliente));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/subscription/resume", sIdCliente), "POST", 0);
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al reactivar Suscripcion";
+                return string.Format("Error:A currido un error al reactivar Suscripcion ({0})",ex.Message);
             }
         }
 
@@ -643,25 +514,12 @@ namespace ConektaFramework2
                     return "Error: Requiere el Id del Cliente";
                 }
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/customers/{0}/subscription/cancel", sIdCliente));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/customers/{0}/subscription/cancel", sIdCliente), "POST", 0);
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al cancelar Suscripcion";
+                return string.Format("Error:A currido un error al cancelar Suscripcion ({0})",ex.Message);
             }
         }
 
@@ -700,29 +558,16 @@ namespace ConektaFramework2
 
                 sBody = "{" + sb.ToString().Remove(sb.ToString().Length - 1) + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create("https://api.conekta.io/charges");
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.publickey, "");
+                HttpWebRequest webRequest = _conektaBase("https://api.conekta.io/charges", "POST", 1);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                string msj = ex.Message;
-                return "Error:A currido un error al crear Cargo";
+                return string.Format("Error:A currido un error al crear Cargo ({0})",ex.Message);
             }
         }
 
@@ -736,24 +581,12 @@ namespace ConektaFramework2
                     return "Error:Requiere Id del Cargo";
                 }
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(string.Format("https://api.conekta.io/charges/{0}",sId));
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "GET";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.privatekey, "");
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/charges/{0}", sId), "GET", 0);
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error al consultar Cargo";
+                return string.Format("Error:A currido un error al consultar Cargo ({0})");
             }
         }
 
@@ -778,28 +611,16 @@ namespace ConektaFramework2
                
                 sBody = "{" + sb.ToString() + "}";
 
-                HttpWebRequest webRequest = (HttpWebRequest)WebRequest.Create(" https://api.conekta.io/charges/{0}/refund");
-                webRequest.KeepAlive = false;
-                webRequest.ContentType = "application/json";
-                webRequest.Method = "POST";
-                webRequest.Accept = "application/vnd.conekta-v0.3.0+json";
-                webRequest.Credentials = new NetworkCredential(this.publickey, "");
+                HttpWebRequest webRequest = _conektaBase(string.Format("https://api.conekta.io/charges/{0}/refund", sId), "POST", 1);
                 using (System.IO.StreamWriter writer = new System.IO.StreamWriter(webRequest.GetRequestStream()))
                 {
                     writer.Write(sBody);
                 }
-                HttpWebResponse webResponse = (HttpWebResponse)webRequest.GetResponse();
-                string sResultado = string.Empty;
-                using (var reader = new System.IO.StreamReader(webResponse.GetResponseStream()))
-                {
-                    sResultado = reader.ReadToEnd();
-                }
-                webResponse.Close();
-                return sResultado;
+                return _conektaBaseResultado(webRequest);
             }
             catch (Exception ex)
             {
-                return "Error:A currido un error en la devolucion de un Cargo";
+                return string.Format("Error:A currido un error en la devolucion de un Cargo ({0})",ex.Message);
             }
         }
     }
